@@ -1,0 +1,7 @@
+mariadb_packages:
+  - mariadb-server
+  - mariadb-client
+
+mariadb_service: mariadb
+mariadb_port: 3306
+

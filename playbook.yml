@@ -1,0 +1,6 @@
+- name: Install MariaDB
+  hosts: ubuntu
+  become: yes
+
+  roles:
+    - mariadb

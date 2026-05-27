@@ -1,0 +1,22 @@
+- name: Update apt cache
+  apt:
+    update_cache: yes
+  when: ansible_os_family == "Debian"
+
+- name: Install MariaDB
+  apt:
+    name: "{{ mariadb_packages }}"
+    state: present
+
+- name: Ensure MariaDB service is started and enabled
+  service:
+    name: "{{ mariadb_service }}"
+    state: started
+    enabled: yes
+
+- name: Deploy MariaDB config
+  template:
+    src: my.cnf.j2
+    dest: /etc/mysql/mariadb.conf.d/99-custom.cnf
+    mode: '0644'
+  notify: Restart MariaDB

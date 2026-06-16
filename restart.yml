@@ -6,7 +6,6 @@
     snow_instance: "nowlearning-nlinst04302549-63gqx-0001"
     snow_user: "admin"
     snow_password: "9TnFc8CuNApy"
- 
     target_assignment_group: "Database Support"
  
   tasks:
@@ -24,15 +23,20 @@
     - name: Save incident data
       set_fact:
         sys_id: "{{ incident.json.result[0].sys_id }}"
-        short_desc: "{{ incident.json.result[0].short_description }}"
+        description: "{{ incident.json.result[0].description }}"
  
-    - name: Extract IP from short description
+    - name: Extract IP from description
       set_fact:
-        target_ip: "{{ short_desc | regex_search('([0-9]{1,3}(?:\\.[0-9]{1,3}){3})') }}"
+        target_ip: "{{ description | regex_search('([0-9]{1,3}(?:\\.[0-9]{1,3}){3})') }}"
  
     - name: Show extracted IP
       debug:
         msg: "Target server {{ target_ip }}"
+ 
+    - name: Fail if no IP found in description
+      fail:
+        msg: "No valid IP address found in incident description."
+      when: target_ip is not defined or target_ip == ""
  
     - name: Add host dynamically
       add_host:
@@ -63,7 +67,7 @@
       set_fact:
         mariadb_running: "{{ mariadb_status.stdout == 'active' }}"
  
-    - name: Return status to localhost
+    - name: Return status
       set_stats:
         data:
           mariadb_running: "{{ mariadb_running }}"
@@ -76,6 +80,7 @@
     snow_instance: "devxxxxx"
     snow_user: "{{ lookup('env','SNOW_USER') }}"
     snow_password: "{{ lookup('env','SNOW_PASSWORD') }}"
+    target_assignment_group: "Database Support"
  
   tasks:
  
@@ -93,7 +98,7 @@
           close_notes: "AAP restarted MariaDB service successfully. Service verified running."
           work_notes: |
             Automation Action:
-            - Restarted MariaDB
+            - Restarted MariaDB service
             - Verified service status ACTIVE
             - Auto resolved by AAP
       when: hostvars[groups['mariadb_targets'][0]].mariadb_running | bool

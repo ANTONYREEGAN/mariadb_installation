@@ -1,0 +1,116 @@
+- name: Auto heal MariaDB service from ServiceNow Incident
+  hosts: localhost
+  gather_facts: false
+ 
+  vars:
+    snow_instance: "nowlearning-nlinst04302549-63gqx-0001"
+    snow_user: "admin"
+    snow_password: "9TnFc8CuNApy"
+ 
+    target_assignment_group: "Database Support"
+ 
+  tasks:
+ 
+    - name: Get incident details
+      uri:
+        url: "https://{{ snow_instance }}.service-now.com/api/now/table/incident?sysparm_query=number={{ incident_number }}"
+        method: GET
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: yes
+        validate_certs: yes
+      register: incident
+ 
+    - name: Save incident data
+      set_fact:
+        sys_id: "{{ incident.json.result[0].sys_id }}"
+        short_desc: "{{ incident.json.result[0].short_description }}"
+ 
+    - name: Extract IP from short description
+      set_fact:
+        target_ip: "{{ short_desc | regex_search('([0-9]{1,3}(?:\\.[0-9]{1,3}){3})') }}"
+ 
+    - name: Show extracted IP
+      debug:
+        msg: "Target server {{ target_ip }}"
+ 
+    - name: Add host dynamically
+      add_host:
+        name: "{{ target_ip }}"
+        groups: mariadb_targets
+ 
+- name: Restart MariaDB
+  hosts: ubuntu
+  become: true
+  gather_facts: false
+ 
+  tasks:
+ 
+    - name: Restart mariadb
+      service:
+        name: mariadb
+        state: restarted
+ 
+    - name: Wait for service
+      shell: systemctl is-active mariadb
+      register: mariadb_status
+      retries: 5
+      delay: 10
+      until: mariadb_status.stdout == "active"
+      ignore_errors: true
+ 
+    - name: Save status
+      set_fact:
+        mariadb_running: "{{ mariadb_status.stdout == 'active' }}"
+ 
+    - name: Return status to localhost
+      set_stats:
+        data:
+          mariadb_running: "{{ mariadb_running }}"
+ 
+- name: Update ServiceNow Incident
+  hosts: localhost
+  gather_facts: false
+ 
+  vars:
+    snow_instance: "devxxxxx"
+    snow_user: "{{ lookup('env','SNOW_USER') }}"
+    snow_password: "{{ lookup('env','SNOW_PASSWORD') }}"
+ 
+  tasks:
+ 
+    - name: Resolve incident when service started
+      uri:
+        url: "https://{{ snow_instance }}.service-now.com/api/now/table/incident/{{ sys_id }}"
+        method: PATCH
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          incident_state: "6"
+          close_code: "Solved (Permanently)"
+          close_notes: "AAP restarted MariaDB service successfully. Service verified running."
+          work_notes: |
+            Automation Action:
+            - Restarted MariaDB
+            - Verified service status ACTIVE
+            - Auto resolved by AAP
+      when: hostvars[groups['mariadb_targets'][0]].mariadb_running | bool
+ 
+    - name: Reassign incident when restart failed
+      uri:
+        url: "https://{{ snow_instance }}.service-now.com/api/now/table/incident/{{ sys_id }}"
+        method: PATCH
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: yes
+        body_format: json
+        body:
+          assignment_group: "{{ target_assignment_group }}"
+          work_notes: |
+            Automation Action:
+            - Restart attempted
+            - MariaDB service still not running
+            - Routed to Database Support team
+      when: not hostvars[groups['mariadb_targets'][0]].mariadb_running | bool

@@ -4,7 +4,7 @@
   gather_facts: false
  
   vars:
-    snow_instance: "nowlearning-nlinst04302549-63gqx-0001.lab"
+    snow_instance: "nowlearning-nlinst04302549-63gqx-0001"
     snow_user: "admin"
     snow_password: "9TnFc8CuNApy"
     target_assignment_group: "Database Support"
@@ -71,7 +71,7 @@
   gather_facts: false
  
   vars:
-    snow_instance: "nowlearning-nlinst04302549-63gqx-0001.lab"
+    snow_instance: "nowlearning-nlinst04302549-63gqx-0001"
     snow_user: "admin"
     snow_password: "9TnFc8CuNApy"
     target_assignment_group: "Database Support"

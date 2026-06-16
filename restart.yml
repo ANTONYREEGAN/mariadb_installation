@@ -1,5 +1,6 @@
-- name: Auto heal MariaDB service from ServiceNow Incident
+- name: Get Incident Details
   hosts: localhost
+  connection: local
   gather_facts: false
  
   vars:
@@ -12,36 +13,32 @@
  
     - name: Get incident details
       uri:
-        url: "https://{{ snow_instance }}.service-now.com/api/now/table/incident?sysparm_query=number={{ incident_number }}"
+        url: "https://{{ snow_instance }}.lab.service-now.com/api/now/table/incident?sysparm_query=number={{ incident_number }}"
         method: GET
         user: "{{ snow_user }}"
         password: "{{ snow_password }}"
         force_basic_auth: yes
-        validate_certs: yes
+        validate_certs: no
       register: incident
  
-    - name: Save incident data
+    - name: Save incident values
       set_fact:
         sys_id: "{{ incident.json.result[0].sys_id }}"
-        description: "{{ incident.json.result[0].description }}"
+        short_description: "{{ incident.json.result[0].short_description }}"
  
-    - name: Extract IP from description
+    - name: Extract IP address
       set_fact:
-        target_ip: "{{ description | regex_search('([0-9]{1,3}(?:\\.[0-9]{1,3}){3})') }}"
+        target_ip: "{{ short_description | regex_search('([0-9]{1,3}(?:\\.[0-9]{1,3}){3})') }}"
  
-    - name: Show extracted IP
+    - name: Display IP
       debug:
-        msg: "Target server {{ target_ip }}"
+        msg: "Target IP = {{ target_ip }}"
  
-    - name: Fail if no IP found in description
-      fail:
-        msg: "No valid IP address found in incident description."
-      when: target_ip is not defined or target_ip == ""
- 
-    - name: Add host dynamically
+    - name: Add target host dynamically
       add_host:
         name: "{{ target_ip }}"
         groups: mariadb_targets
+ 
  
 - name: Restart MariaDB
   hosts: ubuntu
@@ -55,7 +52,7 @@
         name: mariadb
         state: restarted
  
-    - name: Wait for service
+    - name: Verify mariadb
       shell: systemctl is-active mariadb
       register: mariadb_status
       retries: 5
@@ -63,19 +60,16 @@
       until: mariadb_status.stdout == "active"
       ignore_errors: true
  
-    - name: Save status
-      set_fact:
-        mariadb_running: "{{ mariadb_status.stdout == 'active' }}"
- 
-    - name: Return status
+    - name: Store status
       set_stats:
         data:
-          mariadb_running: "{{ mariadb_running }}"
- 
-- name: Update ServiceNow Incident
-  hosts: localhost
-  gather_facts: false
+          mariadb_running: "{{ mariadb_status.stdout | trim == 'active' }}"
   
+- name: Update Incident
+  hosts: localhost
+  connection: local
+  gather_facts: false
+ 
   vars:
     snow_instance: "nowlearning-nlinst04302549-63gqx-0001.lab"
     snow_user: "admin"
@@ -84,38 +78,41 @@
  
   tasks:
  
-    - name: Resolve incident when service started
+    - name: Resolve incident
       uri:
-        url: "https://{{ snow_instance }}.service-now.com/api/now/table/incident/{{ sys_id }}"
+        url: "https://{{ snow_instance }}.lab.service-now.com/api/now/table/incident/{{ hostvars['localhost']['sys_id'] }}"
         method: PATCH
         user: "{{ snow_user }}"
         password: "{{ snow_password }}"
         force_basic_auth: yes
+        validate_certs: no
         body_format: json
         body:
           incident_state: "6"
           close_code: "Solved (Permanently)"
-          close_notes: "AAP restarted MariaDB service successfully. Service verified running."
+          close_notes: "MariaDB restarted successfully by AAP."
           work_notes: |
             Automation Action:
-            - Restarted MariaDB service
-            - Verified service status ACTIVE
-            - Auto resolved by AAP
-      when: hostvars[groups['localhost'][0]].mariadb_running | bool
+            - Restarted MariaDB
+            - Service verified ACTIVE
+            - Incident auto resolved
+      when: mariadb_running | default(false)
  
-    - name: Reassign incident when restart failed
+    - name: Reassign incident
       uri:
-        url: "https://{{ snow_instance }}.service-now.com/api/now/table/incident/{{ sys_id }}"
+        url: "https://{{ snow_instance }}.lab.service-now.com/api/now/table/incident/{{ hostvars['localhost']['sys_id'] }}"
         method: PATCH
         user: "{{ snow_user }}"
         password: "{{ snow_password }}"
         force_basic_auth: yes
+        validate_certs: no
         body_format: json
         body:
           assignment_group: "{{ target_assignment_group }}"
           work_notes: |
             Automation Action:
             - Restart attempted
-            - MariaDB service still not running
-            - Routed to Database Support team
-      when: not hostvars[groups['localhost'][0]].mariadb_running | bool
+            - MariaDB still not running
+            - Routed to Database Support Team
+      when: not mariadb_running | default(false)
+ 

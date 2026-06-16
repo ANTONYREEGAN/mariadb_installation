@@ -1,7 +1,6 @@
 - name: Auto heal MariaDB service from ServiceNow Incident
   hosts: localhost
   gather_facts: false
-  become: yes
  
   vars:
     snow_instance: "nowlearning-nlinst04302549-63gqx-0001"
@@ -76,7 +75,7 @@
 - name: Update ServiceNow Incident
   hosts: localhost
   gather_facts: false
-  become: yes   
+  
   vars:
     snow_instance: "nowlearning-nlinst04302549-63gqx-0001"
     snow_user: "admin"

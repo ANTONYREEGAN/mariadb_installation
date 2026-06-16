@@ -1,5 +1,5 @@
 - name: Auto heal MariaDB service from ServiceNow Incident
-  hosts: localhost
+  hosts: ubuntu
   gather_facts: false
   become: yes
  
@@ -74,7 +74,7 @@
           mariadb_running: "{{ mariadb_running }}"
  
 - name: Update ServiceNow Incident
-  hosts: localhost
+  hosts: ubuntu
   gather_facts: false
   become: yes   
   vars:

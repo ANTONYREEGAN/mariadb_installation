@@ -101,7 +101,7 @@
             - Restarted MariaDB service
             - Verified service status ACTIVE
             - Auto resolved by AAP
-      when: hostvars[groups['mariadb_targets'][0]].mariadb_running | bool
+      when: hostvars[groups['localhost'][0]].mariadb_running | bool
  
     - name: Reassign incident when restart failed
       uri:
@@ -118,4 +118,4 @@
             - Restart attempted
             - MariaDB service still not running
             - Routed to Database Support team
-      when: not hostvars[groups['mariadb_targets'][0]].mariadb_running | bool
+      when: not hostvars[groups['localhost'][0]].mariadb_running | bool

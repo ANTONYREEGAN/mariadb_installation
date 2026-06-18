@@ -37,12 +37,12 @@
     - name: Add host dynamically
       add_host:
         name: "{{ target_ip }}"
-        groups: mariadb_targets
+        groups: ubuntu
  
 ##########################################################
  
 - name: Restart MariaDB
-  hosts: mariadb_targets
+  hosts: ubuntu
   become: false
   gather_facts: false
  

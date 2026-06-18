@@ -43,7 +43,7 @@
  
 - name: Restart MariaDB
   hosts: mariadb_targets
-  become: true
+  become: false
   gather_facts: false
  
   tasks:

@@ -1,3 +1,4 @@
+---
 - name: Get Incident Details
   hosts: localhost
   connection: local
@@ -21,51 +22,53 @@
         validate_certs: no
       register: incident
  
-    - name: Save incident values
+    - name: Save values
       set_fact:
         sys_id: "{{ incident.json.result[0].sys_id }}"
-        short_description: "{{ incident.json.result[0].short_description }}"
+        description: "{{ incident.json.result[0].description }}"
  
     - name: Extract IP address
       set_fact:
-        target_ip: "{{ short_description | regex_search('([0-9]{1,3}(?:\\.[0-9]{1,3}){3})') }}"
+        target_ip: "{{ description | regex_search('([0-9]{1,3}(?:\\.[0-9]{1,3}){3})') }}"
  
-    - name: Display IP
-      debug:
+    - debug:
         msg: "Target IP = {{ target_ip }}"
  
-    - name: Add target host dynamically
+    - name: Add host dynamically
       add_host:
         name: "{{ target_ip }}"
         groups: mariadb_targets
  
+##########################################################
  
 - name: Restart MariaDB
-  hosts: ubuntu
+  hosts: mariadb_targets
   become: true
   gather_facts: false
  
   tasks:
  
-    - name: Restart mariadb
+    - name: Restart MariaDB
       service:
         name: mariadb
         state: restarted
  
-    - name: Verify mariadb
+    - name: Verify service
       shell: systemctl is-active mariadb
       register: mariadb_status
       retries: 5
       delay: 10
-      until: mariadb_status.stdout == "active"
-      ignore_errors: true
+      until: mariadb_status.stdout | trim == "active"
  
-    - name: Store status
-      set_stats:
-        data:
-          mariadb_running: "{{ mariadb_status.stdout | trim == 'active' }}"
-  
-- name: Update Incident
+    - name: Save status to localhost
+      delegate_to: localhost
+      delegate_facts: true
+      set_fact:
+        mariadb_running: "{{ mariadb_status.stdout | trim == 'active' }}"
+ 
+##########################################################
+ 
+- name: Update ServiceNow
   hosts: localhost
   connection: local
   gather_facts: false
@@ -78,9 +81,12 @@
  
   tasks:
  
+    - debug:
+        var: mariadb_running
+ 
     - name: Resolve incident
       uri:
-        url: "https://{{ snow_instance }}.lab.service-now.com/api/now/table/incident/{{ hostvars['localhost']['sys_id'] }}"
+        url: "https://{{ snow_instance }}.lab.service-now.com/api/now/table/incident/{{ sys_id }}"
         method: PATCH
         user: "{{ snow_user }}"
         password: "{{ snow_password }}"
@@ -94,13 +100,13 @@
           work_notes: |
             Automation Action:
             - Restarted MariaDB
-            - Service verified ACTIVE
+            - Verified ACTIVE
             - Incident auto resolved
-      when: mariadb_running | default(false)
+      when: mariadb_running | bool
  
     - name: Reassign incident
       uri:
-        url: "https://{{ snow_instance }}.lab.service-now.com/api/now/table/incident/{{ hostvars['localhost']['sys_id'] }}"
+        url: "https://{{ snow_instance }}.lab.service-now.com/api/now/table/incident/{{ sys_id }}"
         method: PATCH
         user: "{{ snow_user }}"
         password: "{{ snow_password }}"
@@ -114,5 +120,4 @@
             - Restart attempted
             - MariaDB still not running
             - Routed to Database Support Team
-      when: not mariadb_running | default(false)
- 
+      when: not mariadb_running | bool
